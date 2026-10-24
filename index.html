@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Predictor pre-partida LoL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#E6E9EE; --surface:#F6F7F9; --ink:#16202B; --muted:#596473; --line:#C7CED8;
+  --blue:#1F5FCF; --blue-soft:#DCE6F8; --red:#C2352B; --red-soft:#F6DEDB; --gold:#8C6A1C;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Barlow","Segoe UI",system-ui,sans-serif;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1620; --surface:#17202C; --ink:#E4E9F0; --muted:#97A2B1; --line:#2A3647;
+    --blue:#5A95FF; --blue-soft:#1A2B47; --red:#F2655A; --red-soft:#3A1F22; --gold:#D6AE55;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1620; --surface:#17202C; --ink:#E4E9F0; --muted:#97A2B1; --line:#2A3647;
+  --blue:#5A95FF; --blue-soft:#1A2B47; --red:#F2655A; --red-soft:#3A1F22; --gold:#D6AE55;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.5 var(--body);-webkit-font-smoothing:antialiased}
+main{max-width:1040px;margin:0 auto;padding:28px 20px 64px}
+h1,h2,.num,.teamname{font-family:var(--display)}
+h1{font-size:clamp(28px,4.4vw,40px);font-weight:700;line-height:1;margin:0;letter-spacing:.2px}
+h2{font-size:22px;font-weight:600;margin:0 0 10px}
+p{margin:0 0 10px;max-width:68ch}
+a{color:var(--blue)}
+.muted{color:var(--muted)}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+header{display:flex;flex-wrap:wrap;gap:14px 24px;align-items:end;justify-content:space-between;margin-bottom:28px}
+header .sub{margin:6px 0 0;color:var(--muted)}
+.data-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.status{font-size:14px;color:var(--muted)}
+.btn{border:1px solid var(--line);background:var(--surface);padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:500}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+#sync{font-size:13px}
+.btn:disabled{opacity:.6;cursor:progress}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+
+/* Enfrentamiento */
+.matchup{display:grid;grid-template-columns:1fr auto 1fr;gap:0;align-items:stretch;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+.side{padding:20px 22px 22px;background:var(--surface);display:flex;flex-direction:column;gap:12px;min-width:0}
+.side.blue{border-top:6px solid var(--blue)}
+.side.red{border-top:6px solid var(--red);text-align:right}
+.side-label{font-weight:600;font-size:15px}
+.blue .side-label{color:var(--blue)} .red .side-label{color:var(--red)}
+.field{display:flex;flex-direction:column;gap:4px}
+.red .field{align-items:stretch}
+.field label{font-size:13px;color:var(--muted)}
+select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+.red select{text-align:right;text-align-last:right}
+.teamname{font-size:clamp(26px,4vw,38px);font-weight:700;line-height:1.05;overflow-wrap:anywhere;margin-top:4px}
+.meta{font-size:14px;color:var(--muted)}
+.swap-col{display:flex;align-items:center;justify-content:center;background:var(--bg);padding:0 10px;border-left:1px solid var(--line);border-right:1px solid var(--line)}
+.swap{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-size:20px;line-height:1}
+.swap:hover{border-color:var(--muted)}
+
+/* Formato */
+.format{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:22px 0 14px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:7px 16px;cursor:pointer;font-weight:500}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+
+/* Barra de probabilidad: el elemento protagonista */
+.verdict{margin:4px 0 6px}
+.nums{display:flex;justify-content:space-between;align-items:baseline}
+.num{font-size:clamp(56px,11vw,112px);font-weight:700;line-height:.9;font-variant-numeric:tabular-nums}
+.num.b{color:var(--blue)} .num.r{color:var(--red)}
+.num small{font-size:.4em;font-weight:600;margin-left:2px}
+.bar{position:relative;height:22px;border-radius:4px;overflow:hidden;background:var(--red);margin:12px 0 8px}
+.bar .fill{position:absolute;inset:0 auto 0 0;background:var(--blue);transition:width .5s cubic-bezier(.2,.8,.2,1)}
+.bar .mid{position:absolute;left:50%;top:-4px;bottom:-4px;width:2px;background:var(--bg);opacity:.7}
+.verdict-text{font-size:15px;color:var(--muted);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.games{font-size:14px;color:var(--muted);margin-top:6px}
+@media (prefers-reduced-motion:reduce){.bar .fill{transition:none}}
+
+/* Comparación */
+section.block{margin-top:40px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;min-width:560px}
+th,td{padding:9px 14px;border-bottom:1px solid var(--line);font-size:15px}
+tr:last-child td{border-bottom:0}
+th{font-weight:600;text-align:left;font-size:14px;color:var(--muted)}
+td.v{text-align:right;width:15%}
+td.v.win{font-weight:600}
+td.v.bv.win{color:var(--blue)} td.v.rv.win{color:var(--red)}
+td.inf{width:34%}
+.infbar{position:relative;height:10px;background:var(--bg);border-radius:2px}
+.infbar span{position:absolute;top:0;bottom:0;border-radius:2px}
+.infbar::after{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--muted)}
+.note{font-size:14px;color:var(--muted);margin-top:10px}
+
+.quality{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:8px}
+.q{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.q b{font-family:var(--display);font-size:28px;font-weight:600;display:block;line-height:1.1}
+.q.best{border-color:var(--gold)}
+.q .lbl{font-size:14px;color:var(--muted)}
+
+/* Estado vacío y carga */
+.empty{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:36px 28px;text-align:center}
+.credit{margin-top:40px;font-size:13px;color:var(--muted)}
+.empty.drag{border-color:var(--blue);background:var(--blue-soft)}
+.empty h2{font-size:30px}
+.empty p{margin:0 auto 14px}
+.empty ol{text-align:left;max-width:60ch;margin:0 auto 20px;padding-left:20px}
+.empty li{margin-bottom:6px}
+.progress{height:6px;background:var(--bg);border-radius:3px;overflow:hidden;max-width:420px;margin:14px auto 6px}
+.progress span{display:block;height:100%;width:0;background:var(--blue)}
+.err{color:var(--red);font-weight:500}
+.hidden{display:none !important}
+
+@media (max-width:640px){
+  main{padding:20px 14px 48px}
+  .matchup{grid-template-columns:1fr;}
+  .side.red{text-align:left}
+  .red select{text-align:left;text-align-last:left}
+  .swap-col{border:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px}
+  .swap{transform:rotate(90deg)}
+  td.inf,th.inf,tr.baserow{display:none} table{min-width:0}
+}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Predictor pre-partida LoL</h1>
+      <p class="sub">Elige los equipos y el lado de cada uno. El modelo usa solo lo que se sabía antes de cada partida.</p>
+    </div>
+    <div class="data-actions"><span class="status" id="status"></span></div>
+  </header>
+
+  <!-- Cargando / error -->
+  <section id="empty" class="empty">
+    <h2 id="emptyTitle">Cargando datos…</h2>
+    <p class="muted" id="emptyText">Un momento.</p>
+  </section>
+
+  <!-- Predictor -->
+  <section id="app" class="hidden">
+    <div class="matchup">
+      <div class="side blue">
+        <div class="side-label">Lado azul</div>
+        <div class="field"><label for="lgB">Liga</label><select id="lgB"></select></div>
+        <div class="field"><label for="tmB">Equipo</label><select id="tmB"></select></div>
+        <div class="teamname" id="nameB"></div>
+        <div class="meta" id="metaB"></div>
+      </div>
+      <div class="swap-col"><button class="swap" id="swap" type="button" aria-label="Intercambiar lados" title="Intercambiar lados">⇄</button></div>
+      <div class="side red">
+        <div class="side-label">Lado rojo</div>
+        <div class="field"><label for="lgR">Liga</label><select id="lgR"></select></div>
+        <div class="field"><label for="tmR">Equipo</label><select id="tmR"></select></div>
+        <div class="teamname" id="nameR"></div>
+        <div class="meta" id="metaR"></div>
+      </div>
+    </div>
+
+    <div class="format">
+      <span class="muted">Formato</span>
+      <div class="seg" role="group" aria-label="Formato">
+        <button type="button" data-bo="1" aria-pressed="true">Bo1</button>
+        <button type="button" data-bo="3" aria-pressed="false">Bo3</button>
+        <button type="button" data-bo="5" aria-pressed="false">Bo5</button>
+      </div>
+    </div>
+
+    <div class="verdict" aria-live="polite">
+      <div class="nums">
+        <div class="num b" id="pctB">–</div>
+        <div class="num r" id="pctR">–</div>
+      </div>
+      <div class="bar"><div class="fill" id="fill" style="width:50%"></div><div class="mid"></div></div>
+      <div class="verdict-text"><span id="vtext"></span><span id="vside"></span></div>
+      <div class="games" id="games"></div>
+    </div>
+
+    <section class="block">
+      <h2>Por qué</h2>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Indicador (forma reciente)</th><th style="text-align:right" id="thB">Azul</th><th style="text-align:right" id="thR">Rojo</th><th class="inf">Hacia quién empuja</th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <p class="note">Valores con media móvil exponencial de unas 10 partidas. La barra muestra cuánto mueve cada indicador la predicción, a la izquierda hacia el azul y a la derecha hacia el rojo.</p>
+    </section>
+
+    <section class="block">
+      <h2>Qué tan fiable es</h2>
+      <p class="muted" id="qtext"></p>
+      <div class="quality" id="quality"></div>
+      <p class="note">Log loss y Brier: cuanto más bajo, mejor calibradas están las probabilidades. Son la medida importante; el acierto solo cuenta si gana el favorito.</p>
+    </section>
+  </section>
+  <footer class="credit">Datos de partidas: <a href="https://oracleselixir.com" target="_blank" rel="noopener">Oracle’s Elixir</a>. Se actualizan automáticamente cada día.</footer>
+</main>
+
+<script src="model.js"></script>
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+const LABELS = {
+  elo:["Elo","int"], wr:["Winrate reciente","pct"], gd15:["Diferencia de oro a los 15","signed"],
+  xpd15:["Diferencia de XP a los 15","signed"], csd15:["Diferencia de CS a los 15","signed1"],
+  fd:["Primer dragón","pct"], ft:["Primera torre","pct"], fh:["Primer heraldo","pct"],
+  fb:["Primer barón","pct"], kpm:["Kills por minuto","dec2"], dpm:["Muertes por minuto","dec2"],
+  sidewr:["Winrate en este lado","pct"]
+};
+const LOWER_BETTER = new Set(["dpm"]);
+const nf = new Intl.NumberFormat("es-ES");
+const fmt = (v,t) => {
+  if (!Number.isFinite(v)) return "–";
+  if (t==="pct") return Math.round(v*100)+" %";
+  if (t==="int") return nf.format(Math.round(v));
+  if (t==="signed") return (v>0?"+":"")+nf.format(Math.round(v));
+  if (t==="signed1") return (v>0?"+":"")+v.toFixed(1).replace(".",",");
+  return v.toFixed(2).replace(".",",");
+};
+const dateES = t => new Date(t).toLocaleDateString("es-ES",{day:"numeric",month:"short",year:"numeric"});
+
+const prefs = {
+  get(){ try{ return JSON.parse(localStorage.getItem("lol-prematch-sel")||"{}"); }catch(e){ return {}; } },
+  set(v){ try{ localStorage.setItem("lol-prematch-sel", JSON.stringify(v)); }catch(e){} }
+};
+
+let M = null, BO = 1;
+
+/* ---------- selectores ---------- */
+function teamList(){
+  const recent=M.tMax-1000*60*60*24*400;
+  return [...M.teams.values()].filter(t=>t.n>=5 && t.last>=recent);
+}
+function leagueOf(t){ return t.lg || t.lgIntl || "Otra"; }
+function setupSelectors(){
+  const teams=teamList();
+  const lgCount=new Map();
+  for(const t of teams) lgCount.set(leagueOf(t),(lgCount.get(leagueOf(t))||0)+1);
+  const leagues=[...lgCount.entries()].sort((a,b)=>b[1]-a[1]).map(e=>e[0]);
+  const p=prefs.get();
+  for(const s of ["B","R"]){
+    const sel=$("lg"+s);
+    sel.innerHTML=`<option value="">Todas</option>`+leagues.map(l=>`<option>${esc(l)}</option>`).join("");
+    if(p["lg"+s] && leagues.includes(p["lg"+s])) sel.value=p["lg"+s];
+    fillTeams(s, p["tm"+s]);
+  }
+  if($("tmB").value===$("tmR").value && $("tmR").options.length>1) $("tmR").selectedIndex=1;
+}
+function fillTeams(s, want){
+  const lg=$("lg"+s).value;
+  const teams=teamList().filter(t=>!lg||leagueOf(t)===lg).sort((a,b)=>b.elo-a.elo);
+  const sel=$("tm"+s), prev=want||sel.value;
+  sel.innerHTML=teams.map(t=>`<option value="${esc(t.name)}">${esc(t.name)}</option>`).join("");
+  if(teams.some(t=>t.name===prev)) sel.value=prev;
+}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ---------- render ---------- */
+function update(){
+  const b=$("tmB").value, r=$("tmR").value;
+  prefs.set({lgB:$("lgB").value,lgR:$("lgR").value,tmB:b,tmR:r,bo:BO});
+  if(!b||!r) return;
+  const TB=M.teams.get(b), TR=M.teams.get(r);
+  for(const [s,T] of [["B",TB],["R",TR]]){
+    $("name"+s).textContent=T.name;
+    const days=Math.round((M.tMax-T.last)/864e5);
+    $("meta"+s).textContent=`${leagueOf(T)}, ${nf.format(T.n)} partidas, última el ${dateES(T.last)}`+(days>90?" (datos antiguos)":"");
+  }
+  $("thB").textContent=b; $("thR").textContent=r;
+  if(b===r){ setBar(.5); $("vtext").textContent="Elige dos equipos distintos."; $("vside").textContent=""; $("games").textContent=""; $("tbody").innerHTML=""; return; }
+
+  const pg=pBlue(M,b,r);
+  const p = BO===1 ? pg : seriesProb(M,b,r,BO);
+  setBar(p);
+  const fav = p>=.5 ? b : r;
+  $("vtext").textContent = BO===1 ? `Probabilidad de ganar el game` : `Probabilidad de ganar la serie Bo${BO}`;
+  const pSwap=1-pBlue(M,r,b);
+  const diff=Math.round((pg-pSwap)*100);
+  $("vside").textContent = diff===0 ? "El lado apenas cambia este game." :
+    `Con los lados cambiados, ${b} tendría ${Math.round(pSwap*100)} % en el game (${diff>0?"pierde":"gana"} ${Math.abs(diff)} puntos).`;
+  $("games").textContent = BO===1 ? "" :
+    `Game 1: ${b} en azul ${Math.round(pg*100)} %. Desde el game 2 el perdedor elige lado; se asume que elige azul.`;
+  renderTable(b,r,TB,TR);
+}
+function setBar(p){
+  $("fill").style.width=(p*100).toFixed(1)+"%";
+  $("pctB").innerHTML=Math.round(p*100)+"<small>%</small>";
+  $("pctR").innerHTML=Math.round((1-p)*100)+"<small>%</small>";
+}
+function renderTable(b,r,TB,TR){
+  const vb=teamValues(TB,0), vr=teamValues(TR,1);
+  const con=contributions(M,b,r);
+  const mx=Math.max(.15,...con.map(c=>Math.abs(c.c)));
+  $("tbody").innerHTML=con.map(({f,c})=>{
+    const [lab,t]=LABELS[f]; const a=vb[f], z=vr[f];
+    let wb=false, wr=false;
+    if(Number.isFinite(a)&&Number.isFinite(z)&&a!==z){ const better=LOWER_BETTER.has(f)? a<z : a>z; wb=better; wr=!better; }
+    const w=Math.abs(c)/mx*50;
+    const bar = c>=0 ? `<span style="right:50%;width:${w}%;background:var(--blue)"></span>`
+                     : `<span style="left:50%;width:${w}%;background:var(--red)"></span>`;
+    return `<tr><td>${lab}</td><td class="v bv${wb?" win":""}">${fmt(a,t)}</td><td class="v rv${wr?" win":""}">${fmt(z,t)}</td><td class="inf"><div class="infbar" title="${(c>=0?"+":"")+c.toFixed(2)} en el logit">${bar}</div></td></tr>`;
+  }).join("") + `<tr class="baserow"><td>Ventaja base del lado azul</td><td class="v"></td><td class="v"></td><td class="inf"><div class="infbar">${
+    M.model.w[0]>=0?`<span style="right:50%;width:${Math.abs(M.model.w[0])/mx*50}%;background:var(--blue)"></span>`:`<span style="left:50%;width:${Math.abs(M.model.w[0])/mx*50}%;background:var(--red)"></span>`}</div></td></tr>`;
+}
+function renderQuality(){
+  const E=M.eval;
+  $("qtext").textContent=`Entrenado con ${nf.format(E.nTrain)} partidas y probado con las ${nf.format(E.nTest)} más recientes (desde el ${dateES(E.from)}), que el modelo no había visto. En ese periodo el lado azul ganó el ${Math.round(E.blueRate*100)} % de las veces.`;
+  const items=[["Este modelo",E.model,true],["Solo Elo",E.elo,false],["Siempre gana azul",E.blue,false]];
+  $("quality").innerHTML=items.map(([n,m,best])=>`<div class="q${best?" best":""}"><span class="lbl">${n}</span><b>${(m.acc*100).toFixed(1).replace(".",",")} % acierto</b><span class="lbl">Log loss ${m.logloss.toFixed(3).replace(".",",")}, Brier ${m.brier.toFixed(3).replace(".",",")}</span></div>`).join("");
+}
+
+/* ---------- eventos ---------- */
+for(const s of ["B","R"]){
+  $("lg"+s).onchange=()=>{ fillTeams(s); update(); };
+  $("tm"+s).onchange=update;
+}
+$("swap").onclick=()=>{
+  const lb=$("lgB").value, lr=$("lgR").value, b=$("tmB").value, r=$("tmR").value;
+  $("lgB").value=lr; $("lgR").value=lb; fillTeams("B",r); fillTeams("R",b); update();
+};
+document.querySelectorAll(".seg button").forEach(btn=>btn.onclick=()=>{
+  BO=+btn.dataset.bo;
+  document.querySelectorAll(".seg button").forEach(x=>x.setAttribute("aria-pressed",x===btn?"true":"false"));
+  update();
+});
+
+/* ---------- arranque: datos ya entrenados cada noche por GitHub Actions ---------- */
+(async()=>{
+  const p=prefs.get(); if([1,3,5].includes(p.bo)){ BO=p.bo; document.querySelectorAll(".seg button").forEach(x=>x.setAttribute("aria-pressed",+x.dataset.bo===BO?"true":"false")); }
+  try{
+    const r=await fetch("data/model.json",{cache:"no-cache"});
+    if(!r.ok) throw new Error(r.status===404?"Todavía no se han generado los datos. Se generan la primera vez que se ejecuta la actualización automática.":"Error "+r.status);
+    const j=await r.json();
+    M={...j, teams:new Map(j.teams.map(t=>[t.name,t]))};
+  }catch(e){
+    $("emptyTitle").textContent="No se pudieron cargar los datos";
+    $("emptyText").textContent=e.message||String(e);
+    return;
+  }
+  $("empty").classList.add("hidden"); $("app").classList.remove("hidden");
+  const upd=new Date(M.updated).toLocaleString("es-ES",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
+  $("status").textContent=`${nf.format(M.nGames)} partidas, ${dateES(M.tMin)} a ${dateES(M.tMax)}. Actualizado el ${upd}`;
+  setupSelectors(); renderQuality(); update();
+})();
+})();
+</script>
+</body>
+</html>

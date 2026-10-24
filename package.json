@@ -1,0 +1,6 @@
+{
+  "name": "lol-predictor",
+  "private": true,
+  "description": "Predictor pre-partida de LoL con actualización diaria",
+  "dependencies": { "papaparse": "5.4.1" }
+}
