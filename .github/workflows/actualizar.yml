@@ -2,7 +2,7 @@ name: Actualizar datos
 
 on:
   schedule:
-    - cron: "7 * * * *"      # cada hora; el script solo trabaja una vez al día, a partir de las 00:00 (Madrid)
+    - cron: "7 22,23,0,1,2,3,4,5 * * *"   # solo de noche: 00:00 a 06:00 hora de Madrid
   workflow_dispatch:          # botón «Run workflow» para forzar una actualización
   push:
     branches: [main]          # al cambiar la página se vuelve a publicar
