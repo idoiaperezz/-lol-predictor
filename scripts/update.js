@@ -23,6 +23,8 @@ const API = "https://www.googleapis.com/drive/v3/files";
 
 const statePath = path.join(CACHE, "state.json");
 const modelPath = path.join(CACHE, "model.json");
+const seedPath = path.join(ROOT, "model-inicial.json");   // modelo exportado a mano desde el HTML local
+let seeded = false;
 const rowsPath = y => path.join(CACHE, `rows-${y}.json.gz`);
 const readJSON = (p, d) => { try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return d; } };
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(new Date());
@@ -84,6 +86,10 @@ function buildSite() {
 async function main() {
   fs.mkdirSync(CACHE, { recursive: true });
   const state = readJSON(statePath, { files: {} });
+  if (!fs.existsSync(modelPath) && fs.existsSync(seedPath)) {
+    fs.copyFileSync(seedPath, modelPath); seeded = true;
+    console.log("Usando model-inicial.json hasta que se puedan descargar los CSV.");
+  }
   const haveModel = fs.existsSync(modelPath);
 
   if (DEPLOY_ONLY && haveModel) { buildSite(); output("deploy", "true"); console.log("Solo republicar la página."); return; }
@@ -96,7 +102,7 @@ async function main() {
   if (!files.length) throw new Error(`No hay CSV de ${MIN_YEAR} en adelante en la carpeta.`);
   const byYear = new Map(files.map(f => [f.year, f]));   // si hay dos del mismo año, el más reciente
 
-  let changed = !haveModel || FORCE || !!state.dirty;
+  let changed = !haveModel || FORCE || !!state.dirty || seeded;
   for (const [year, f] of byYear) {
     const prev = state.files[year];
     if (!FORCE && prev && prev.modifiedTime === f.modifiedTime && fs.existsSync(rowsPath(year))) continue;
@@ -149,7 +155,8 @@ main().catch(e => {
   if (e instanceof QuotaError) {
     // No es un fallo nuestro: Google limita las descargas del archivo. Se reintenta en la próxima hora.
     console.log("::warning::Google ha limitado temporalmente las descargas del CSV. Se reintentará en la próxima ejecución.");
-    output("deploy", "false");
+    // Si acabamos de cargar el modelo inicial, se publica ya para que la web funcione mientras tanto
+    if (seeded) { buildSite(); output("deploy", "true"); } else output("deploy", "false");
     return;
   }
   console.error(e);
