@@ -1,0 +1,76 @@
+name: Actualizar datos
+
+on:
+  schedule:
+    - cron: "7 * * * *"      # cada hora; el script solo trabaja una vez al día, a partir de las 00:00 (Madrid)
+  workflow_dispatch:          # botón «Run workflow» para forzar una actualización
+  push:
+    branches: [main]          # al cambiar la página se vuelve a publicar
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: actualizar-datos
+  cancel-in-progress: false
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm install --no-audit --no-fund
+
+      - name: Recuperar datos de ejecuciones anteriores
+        uses: actions/cache/restore@v4
+        with:
+          path: cache
+          key: datos-${{ github.run_id }}
+          restore-keys: datos-
+
+      - name: Descargar CSV y entrenar
+        id: update
+        run: node scripts/update.js
+        env:
+          DRIVE_API_KEY: ${{ secrets.DRIVE_API_KEY }}
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
+          DEPLOY_ONLY: ${{ github.event_name == 'push' && '1' || '' }}
+
+      - name: Guardar datos para la próxima vez
+        if: always() && hashFiles('cache/**') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: cache
+          key: datos-${{ hashFiles('cache/**') }}
+
+      - name: Anotar la actualización
+        if: steps.update.outputs.commit == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898333+github-actions[bot]@users.noreply.github.com"
+          git add data/ultima-actualizacion.txt
+          git diff --cached --quiet || git commit -m "Datos actualizados $(date -u +%F)"
+          git push
+
+      - if: steps.update.outputs.deploy == 'true'
+        uses: actions/configure-pages@v5
+
+      - if: steps.update.outputs.deploy == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - if: steps.update.outputs.deploy == 'true'
+        id: deploy
+        uses: actions/deploy-pages@v4
